@@ -1,0 +1,10 @@
+{"userId": "abc123", "name": "add_revenue", "value": 432}
+{"userId": "def456", "name": "subtract_revenue", "value": 200}
+{"userId": "ghi789", "name": "add_revenue", "value": 1000}
+{"userId": "abc123", "name": "subtract_revenue", "value": 150}
+{"userId": "def456", "name": "add_revenue", "value": 800}
+{"userId": "jkl012", "name": "subtract_revenue", "value": 350}
+{"userId": "mno345", "name": "add_revenue", "value": 600}
+{"userId": "pqr678", "name": "subtract_revenue", "value": 250}
+{"userId": "stu901", "name": "add_revenue", "value": 750}
+{"userId": "abc123", "name": "subtract_revenue", "value": 100}
