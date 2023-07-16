@@ -2,9 +2,12 @@ import express from "express";
 import bodyParser from "body-parser";
 import fs from "fs";
 import readline from "readline";
+import { pipeline } from "stream";
 import axios from "axios";
+require("dotenv").config();
 
 const EVENT_SERVER_URL = "http://localhost:8000";
+const EVENTS_FILE_PATH = "events.jsonl";
 
 const app = express();
 app.use(bodyParser.json());
@@ -13,22 +16,50 @@ app.listen(3000, () => {
   console.log("client is running on port 3000");
 });
 
-processFile("events.jsonl");
+app.get("/generateEvents", (req, res) => {
+  console.log("Starting to generate events...");
+  generateEvents(EVENTS_FILE_PATH, postEvent);
+  res.status(200).send("OK");
+});
 
-async function* lineGenerator(filePath: string) {
-  const fileStream = fs
-    .createReadStream(filePath, "utf8")
-    .on("error", (error) => {
-      console.error("Error reading file:", error);
+async function generateEvents(
+  filePath: string,
+  callback: (event: any) => void
+) {
+  try {
+    const fileStream = fs.createReadStream(filePath, "utf8");
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
     });
 
-  const rl = readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity,
-  });
-
-  for await (const line of rl) {
-    yield line;
+    pipeline(
+      rl,
+      async (source) => {
+        for await (const line of source) {
+          try {
+            const event = JSON.parse(line);
+            const isValid = validateEvent(event);
+            if (!isValid) {
+              console.error("Invalid event, skipping:", event);
+              continue;
+            }
+            callback(event);
+          } catch (error: any) {
+            throw new Error("Error parsing JSON: " + error.message);
+          }
+        }
+      },
+      async function (err) {
+        if (err) {
+          console.error("Pipeline error:", err);
+        } else {
+          console.log("Pipeline completed");
+        }
+      }
+    );
+  } catch (error: any) {
+    throw new Error("Error reading file: " + error.message);
   }
 }
 
@@ -38,31 +69,10 @@ async function postEvent(event: any) {
     const response = await axios.post(`${EVENT_SERVER_URL}/liveEvent`, event, {
       headers: { Authorization: `Basic ${secret}` },
     });
-    console.log("Response:", response.data);
+    console.log("postEvent response:", response.data);
   } catch (error) {
     console.error("Error posting event:", error);
   }
-}
-
-async function processFile(filePath: string) {
-  const generator = lineGenerator(filePath);
-
-  for await (const line of generator) {
-    try {
-      const event = JSON.parse(line);
-      const isValid = validateEvent(event);
-      if (!isValid) {
-        console.error("Invalid event, skipping:", event);
-        continue;
-      }
-      console.log("Event:", event);
-      postEvent(event);
-    } catch (error) {
-      console.error("Error parsing JSON:", error);
-    }
-  }
-
-  console.log("File reading completed.");
 }
 
 function validateEvent(event: any) {

@@ -1,27 +1,31 @@
 import express from "express";
 import bodyParser from "body-parser";
+import { Pool } from "pg";
+import fs from "fs";
+import { pipeline } from "stream";
+require("dotenv").config();
+
+import util from "util";
+import { Readable } from "stream";
+const readFileAsync = util.promisify(fs.readFile);
+
+const dbConfig = {
+  host: process.env.DB_HOST || "localhost",
+  port: Number(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME || "",
+  user: process.env.DB_USER || "",
+  password: process.env.DB_PASSWORD || "",
+};
+
+const SERVER_EVENTS_FILE_PATH =
+  process.env.SERVER_EVENTS_FILE_PATH || "server_events.jsonl";
 
 const app = express();
 app.use(bodyParser.json());
 
-import { Pool } from "pg";
-const pool = new Pool({
-  host: "localhost",
-  port: 5432,
-  database: "leonyalin",
-  user: "leonyalin",
-  password: "",
-});
+const pool = new Pool(dbConfig);
 
-pool.query("SELECT NOW()", (err, res) => {
-  if (err) {
-    console.error("Error executing query:", err);
-  } else {
-    console.log("Query result:", res.rows);
-  }
-});
-
-app.post("/liveEvent", (req, res) => {
+app.post("/liveEvent", (req, res, next) => {
   const secret = "secret";
   const auth = req.headers.authorization;
 
@@ -37,24 +41,68 @@ app.post("/liveEvent", (req, res) => {
     return;
   }
 
-  console.log("Received event:", req.body);
+  // Here, we're adding a timestamp to the event data before writing it to the file.
+  // This is so that we can use the timestamp to find the unprocessed events in the file later.
+  const jsonData = `${JSON.stringify({
+    ...req.body,
+    timestamp: Date.now(),
+  })}\n`;
+
+  const writableStream = fs.createWriteStream(SERVER_EVENTS_FILE_PATH, {
+    flags: "a",
+  });
+
+  pipeline(Readable.from([jsonData]), writableStream, (err: any) => {
+    if (err) {
+      next(err);
+    } else {
+      console.log("Data appended to file successfully.");
+    }
+  });
+
   res.status(200).send("OK");
 });
 
-app.get("/userEvents/:userId", (req, res) => {
+app.get("/userEvents/:userId", async (req, res) => {
   const userId = req.params.userId;
-  if (!userId) {
-    console.error("Missing userId parameter");
+  if (!userId || typeof userId !== "string") {
+    console.error("Invalid userId parameter");
     res.status(400).send("Bad Request");
     return;
   }
 
-  console.log("Received request for user:", userId);
+  try {
+    const data = await pool.query(
+      "SELECT * FROM users_revenue WHERE user_id = $1",
+      [userId]
+    );
+
+    res.status(200).send(data.rows);
+  } catch (error: any) {
+    console.error("Error getting user events:", error.message);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/createTable", (req, res) => {
+  console.log("Starting to create table...");
+  createUsersRevenueTable();
+  res.status(200).send("OK");
 });
 
 app.listen(8000, () => {
   console.log("server is running on port 8000");
 });
+
+async function createUsersRevenueTable() {
+  try {
+    const sql = await readFileAsync("db.sql", "utf8");
+    await pool.query(sql);
+    console.log("Table created successfully.");
+  } catch (error: any) {
+    throw new Error("Error creating table: " + error.message);
+  }
+}
 
 function validateEvent(event: any) {
   let valid = true;

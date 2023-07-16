@@ -6,7 +6,10 @@
   "scripts": {
     "start:client": "ts-node-dev client.ts",
     "start:server": "ts-node-dev server.ts",
-    "start": "npm-run-all --parallel start:*"
+    "start": "npm-run-all --parallel start:*",
+    "generate_events": "curl localhost:3000/generateEvents",
+    "create_table": "curl localhost:8000/createTable",
+    "process_data": "ts-node-dev data_processor.ts"
   },
   "repository": {
     "type": "git",
@@ -19,10 +22,12 @@
     "@types/express": "^4.17.17",
     "@types/node": "^20.4.2",
     "axios": "^1.4.0",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "nodemon": "^3.0.1",
     "npm-run-all": "^4.1.5",
     "pg": "^8.11.1",
+    "pg-promise": "^11.5.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.1.6"
   },
