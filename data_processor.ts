@@ -194,9 +194,6 @@ async function writeUpdatedUsersRevenueToDB(mergedUsersRevenue: any) {
         );
       });
 
-      console.log("insertQueries:", insertQueries);
-      console.log("updateQueries:", updateQueries);
-
       await t.batch([...insertQueries, ...updateQueries]);
     });
 
